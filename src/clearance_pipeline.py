@@ -7,7 +7,7 @@ This is the integration of the ML model with the deterministic rules engine.
 import joblib
 import json
 import numpy as np
-from rules_engine import RulesEngine
+from rules_engine import RulesEngine, COUNTRY_NAMES
 
 
 # ====================================================================
@@ -50,9 +50,18 @@ class ClearancePipeline:
         results = []
         for idx in top_indices:
             hs_code = self.model.classes_[idx]
+
+            # Look up description — try JSON first, fall back to rules DB
+            hs_desc = self.hs_descriptions.get(hs_code)
+            if not hs_desc:
+                matching = self.rules_engine.rules_df[
+                    self.rules_engine.rules_df['hs_code'] == str(hs_code)
+                ]
+                hs_desc = matching['hs_description'].iloc[0] if len(matching) > 0 else 'Apparel item'
+
             results.append({
                 'hs_code': hs_code,
-                'hs_description': self.hs_descriptions.get(hs_code, 'Unknown'),
+                'hs_description': hs_desc,
                 'confidence': float(probs[idx]),
             })
         return results
@@ -76,26 +85,25 @@ class ClearancePipeline:
 
         docs_list = '\n  '.join(f"- {doc}" for doc in rule['required_docs'])
 
-        # Confidence-routed message
+                    # Confidence-routed message — consignor doesn't see the HS code
         if confidence >= 0.90:
-            classification_line = f"Classified as: {hs_code} — {hs_desc}"
+            classification_line = f"Identified as: {hs_desc}"
         elif confidence >= 0.60:
             classification_line = (
-                f"Likely classified as: {hs_code} — {hs_desc} (confidence {confidence:.0%}). "
-                "Please confirm at upload."
+                f"Likely identified as: {hs_desc}. "
+                "Our team may confirm at upload time."
             )
         else:
             classification_line = (
-                f"Classification uncertain (top guess: {hs_code} — {hs_desc} at {confidence:.0%}). "
+                f"Classification uncertain (best guess: {hs_desc}). "
                 "We may need a follow-up question to confirm."
             )
-
         restrictions_line = ""
         if rule['restrictions'] and rule['restrictions'] != 'None':
             restrictions_line = f"\n⚠️  Note: {rule['restrictions']}"
 
         message = (
-            f"Hi! Your shipment is on its way to {rule['destination_country']}.\n\n"
+            f"Hi! Your shipment is on its way to {COUNTRY_NAMES.get(rule['destination_country'], rule['destination_country'])}.\n\n"
             f"{classification_line}\n\n"
             f"To clear customs at destination, please upload these documents:\n"
             f"  {docs_list}\n\n"

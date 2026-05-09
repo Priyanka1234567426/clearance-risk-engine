@@ -13,6 +13,18 @@ For this project, we read from the synthetic rules_database.csv.
 
 import pandas as pd
 
+# Country code → readable name lookup
+COUNTRY_NAMES = {
+    'US': 'United States',
+    'UK': 'United Kingdom',
+    'CA': 'Canada',
+    'DE': 'Germany',
+    'IN': 'India',
+    'CN': 'China',
+    'BD': 'Bangladesh',
+    'VN': 'Vietnam',
+}
+
 
 class RulesEngine:
     """Loads the rules database once and serves lookups."""
